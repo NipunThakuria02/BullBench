@@ -3,7 +3,7 @@
 # Everything below is research pipeline, local data, or development tooling.
 
 # Python research pipeline and environments
-src/
+/src/
 tests/
 pyproject.toml
 requirements.lock
