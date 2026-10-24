@@ -1,26 +1,256 @@
-# BullBench — next-session closing-value forecasting
+# BullBench
 
-Compare Naive, Ridge, ARIMA, Random Forest and XGBoost on five NSE stocks plus Nifty 50. The objective is to measure how closely each approach predicts the next session's closing value and whether it improves on the previous-close naive forecast. No model is presumed to win.
+**Next-session closing-value forecasting for NSE equities**
 
-**BullBench frontend update:** Read [BULLBENCH_UPDATE.md](BULLBENCH_UPDATE.md) for installation, full-history chart requirements and design details.
+A rigorous walk-forward evaluation framework that compares five forecasting models on six NSE assets. The goal is to measure how closely each approach predicts the next session's closing value and whether it meaningfully improves on the previous-close naive baseline. No model is assumed to win a priori.
 
-**Price-comparison research update:** Read [PRICE_UPDATE.md](PRICE_UPDATE.md). It includes Windows commands, file placement and a workflow using saved forecasts without retraining. [START_HERE.md](START_HERE.md) covers a fresh installation.
+---
 
-## Research contract
+## Table of Contents
 
-- Fixed assets: HDFCBANK.NS, ICICIBANK.NS, TCS.NS, RELIANCE.NS, TATASTEEL.NS and ^NSEI.
-- Fixed inclusive data range: 2021-10-01 through 2026-10-16.
-- Predict next-session adjusted close-to-close returns internally; reconstruct closing value as `previous observed close * (1 + predicted return)`.
-- Primary comparison: closing-value MAE within each asset, with RMSE for large misses and improvement over naive. Stock units are adjusted INR closes; Nifty units are points. Historical adjusted values are not necessarily the original exchange quotes.
-- Cross-asset comparison: equal-weight mean of per-asset baseline-relative error improvements. Never pool raw currency/index-point errors across assets.
-- Expanding walk-forward validation: two calendar years initially (including feature warmup), three-month tests and quarterly refits; training-only preprocessing and regime thresholds.
-- Return errors, direction, quarters, lagged volatility regimes and paired date-block uncertainty are supporting evidence. No combined realism pass/fail flag.
+- [Overview](#overview)
+- [Research Scope](#research-scope)
+- [Models](#models)
+- [Features](#features)
+- [Project Structure](#project-structure)
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Dashboard](#dashboard)
+- [Development](#development)
+- [Limitations](#limitations)
 
-Features include lagged returns, rolling means/volatility, domestic index/sector/VIX context, S&P 500, USD/INR and crude. Context returns are computed on native source calendars before backward availability-time alignment. See [the research revision](docs/RESEARCH_REVISION.md) and [the price update](PRICE_UPDATE.md) for timing and uncertainty assumptions.
+---
 
-## Use saved forecasts now
+## Overview
 
-From the existing project root on Windows:
+BullBench evaluates five return-forecasting strategies under a strict expanding walk-forward validation protocol. Predictions are made in next-session adjusted close-to-close return space and then reconstructed to closing price as:
+
+```
+predicted_close = previous_observed_close * (1 + predicted_return)
+```
+
+Accuracy is measured per asset using closing-value MAE and RMSE, with improvement over the naive (previous-close) baseline as the primary criterion. Cross-asset comparisons use the equal-weight mean of per-asset baseline-relative error improvements. Raw currency and index-point errors are never pooled across assets.
+
+---
+
+## Research Scope
+
+| Parameter | Value |
+|---|---|
+| Assets | HDFCBANK.NS, ICICIBANK.NS, TCS.NS, RELIANCE.NS, TATASTEEL.NS, ^NSEI |
+| Data range | 2021-10-01 through 2026-10-16 (inclusive) |
+| Validation | Expanding walk-forward, 2-year initial window, 3-month test blocks, quarterly refits |
+| Primary metric | Closing-value MAE per asset, with RMSE and baseline-relative skill score |
+| Units | Adjusted INR closes for equities; index points for Nifty 50 |
+
+Supporting diagnostics include return errors, directional accuracy, per-quarter and per-regime breakdowns, lagged volatility regimes, and uncertainty intervals. There is no combined pass/fail realism flag.
+
+---
+
+## Models
+
+| Model | Description |
+|---|---|
+| **Naive** | Predicts zero return (previous close carried forward). Serves as the baseline. |
+| **Ridge** | Regularised linear regression with training-only StandardScaler (`alpha=10`). |
+| **ARIMA** | ARIMA(1,0,1) with constant trend. State updated after each observed outcome without parameter refitting. Target multiplied by 100 for numerical conditioning. |
+| **Random Forest** | 150 trees, max depth 6, min samples per leaf 15 (`random_state=42`). |
+| **XGBoost** | 150 rounds, max depth 3, learning rate 0.03, L2 regularisation 10, histogram method on CPU (`random_state=42`). |
+
+All supervised models are fitted once per quarterly fold on training data only. Preprocessing thresholds (scaler statistics, regime quantiles) are computed exclusively on training partitions and held fixed over each test block.
+
+---
+
+## Features
+
+Predictors are constructed to be available at or before 18:00 IST on the preceding NSE session, reflecting a realistic information cutoff.
+
+**Own-asset features**
+
+- Lagged returns: lags 1, 2, 3, 5, 10
+- Rolling volatility: 5, 10, 20, 60-day windows (shifted by one session)
+- Rolling mean return: 5, 10, 20, 60-day windows (shifted by one session)
+
+**Context features** (aligned to information-cutoff timestamps)
+
+| Feature | Source | Availability assumption |
+|---|---|---|
+| Nifty 50 return | ^NSEI | 18:00 IST on source date |
+| Sector index return | ^NSEBANK / ^CNXIT / ^CNXENERGY / ^CNXMETAL | 18:00 IST on source date |
+| India VIX return and level | ^INDIAVIX | 18:00 IST on source date |
+| S&P 500 return | ^GSPC | 18:00 US Eastern (DST-aware) |
+| USD/INR return | INR=X | 06:00 UTC next day |
+| Crude oil return | CL=F | 06:00 UTC next day |
+
+Context returns are computed on native source calendars before backward availability-time alignment using `merge_asof` with a 7-day tolerance. Market volatility (20-session rolling) from Nifty 50 is used to label each test session's volatility regime (volatile vs. calm), with the regime threshold set from the training fold's 75th percentile.
+
+---
+
+## Project Structure
+
+```
+STOCK-main/
+├── src/
+│   └── nse_forecast/
+│       ├── cli.py             # Command-line interface
+│       ├── config.py          # Asset list, date range, context tickers
+│       ├── data.py            # Download and cache management (yfinance)
+│       ├── features.py        # Feature engineering and context alignment
+│       ├── models.py          # Model definitions and hyperparameters
+│       ├── evaluate.py        # Walk-forward evaluation loop and metrics
+│       ├── diagnostics.py     # Per-quarter and per-regime diagnostics
+│       ├── report.py          # HTML report generation
+│       ├── web.py             # Local web server and JSON export
+│       ├── audit.py           # Data quality audit
+│       ├── import_csv.py      # Sector index CSV import utility
+│       ├── history.py         # Historical chart data
+│       └── provenance.py      # Data provenance tracking
+├── web/                       # React/TypeScript frontend (Vite)
+│   └── src/
+│       ├── main.tsx           # Dashboard application
+│       ├── charts.tsx         # Chart components
+│       ├── data.ts            # Data loading and formatting
+│       ├── assets.ts          # Asset metadata
+│       ├── history.ts         # Historical chart data handling
+│       ├── equations.tsx      # KaTeX equation rendering
+│       └── styles.css         # Application styles
+├── data/                      # yfinance CSV cache and provenance JSON files
+├── reports/                   # Evaluation outputs (predictions, run metadata, HTML report)
+├── reports-price-comparison/  # Price-comparison rendered reports
+├── reports-v2-exploratory/    # Exploratory evaluation outputs
+├── docs/                      # Research documentation
+│   ├── RESEARCH_REVISION.md
+│   ├── IMPORT_SECTOR_CSVS.md
+│   ├── DATA_AVAILABILITY.md
+│   └── DEVELOPMENT_TOOLS.md
+├── scripts/
+│   └── setup.sh               # Unix setup script
+├── tests/                     # Python test suite (pytest)
+├── pyproject.toml
+├── requirements.lock
+└── vercel.json
+```
+
+---
+
+## Requirements
+
+| Component | Version |
+|---|---|
+| Python | 3.12 recommended (>=3.11 required) |
+| Node.js | 22 LTS recommended (>=20.19.0 required) |
+| numpy | >=1.26, <3 |
+| pandas | >=2.2, <3 |
+| scikit-learn | >=1.5, <2 |
+| statsmodels | >=0.14, <0.15 |
+| xgboost | >=2.1, <4 |
+| yfinance | >=0.2.54, <1 |
+| React | 19 |
+| Vite | 6 |
+
+---
+
+## Installation
+
+### 1. Clone and create a virtual environment
+
+```cmd
+git clone <repository-url>
+cd STOCK-main
+python -m venv .venv
+```
+
+### 2. Install Python dependencies
+
+**Windows:**
+
+```cmd
+.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
+```
+
+**Unix/macOS:**
+
+```bash
+bash scripts/setup.sh
+```
+
+> The `requirements.lock` file is a Linux snapshot and is not a portable cross-platform lock. Install using the package extras above for reliable cross-platform setup.
+
+### 3. Install frontend dependencies
+
+```cmd
+npm --prefix web ci
+```
+
+---
+
+## Usage
+
+All commands are run through the `nse_forecast.cli` module using the project virtual environment.
+
+### Download market data
+
+Downloads and caches price data from Yahoo Finance for all configured tickers.
+
+```cmd
+.\.venv\Scripts\python.exe -m nse_forecast.cli download
+```
+
+Use `--refresh` to force re-download of existing cached files. Use `--cache` to specify a custom cache directory (default: `data/cache`).
+
+### Import sector index CSVs
+
+Yahoo Finance does not provide historical data for `^CNXENERGY` and `^CNXMETAL`. Download official price-index CSVs from NSE India and import them:
+
+```cmd
+.\.venv\Scripts\python.exe -m nse_forecast.cli import-sector --ticker ^CNXENERGY --files "path\to\CNXENERGY*.csv"
+.\.venv\Scripts\python.exe -m nse_forecast.cli import-sector --ticker ^CNXMETAL  --files "path\to\CNXMETAL*.csv"
+```
+
+See [docs/IMPORT_SECTOR_CSVS.md](docs/IMPORT_SECTOR_CSVS.md) for the full import guide.
+
+### Audit data
+
+Run a data quality audit before evaluation to identify cross-source calendar discrepancies.
+
+```cmd
+.\.venv\Scripts\python.exe -m nse_forecast.cli audit-data --output audit
+```
+
+Evaluation stops by default if unresolved audit issues are found. To allow an explicitly labeled exploratory run:
+
+```cmd
+.\.venv\Scripts\python.exe -m nse_forecast.cli evaluate --allow-unverified-calendar --output reports-exploratory
+```
+
+> Do not invent missing prices or automatically delete suspicious candles. Verify discrepancies against primary sources before rerunning.
+
+### Run full evaluation
+
+Runs the walk-forward evaluation across all assets and models, saves predictions, metadata, and an HTML report.
+
+```cmd
+.\.venv\Scripts\python.exe -m nse_forecast.cli evaluate --output reports
+```
+
+> The output directory must not already contain `predictions.csv` or `run.json`. Use a new directory to preserve existing results.
+
+### Build and serve the dashboard
+
+```cmd
+npm --prefix web run build
+.\.venv\Scripts\python.exe -m nse_forecast.cli render-report --reports reports --output reports-price-comparison
+.\.venv\Scripts\python.exe -m nse_forecast.web --port 8000 --reports reports-price-comparison
+```
+
+Open [http://127.0.0.1:8000](http://127.0.0.1:8000) in a browser.
+
+No model fitting or network data download occurs during rendering. Original predictions and the training manifest are copied unchanged; only presentation metadata is written to `render.json`.
+
+### Use saved forecasts without retraining
+
+If evaluation outputs already exist, you can rebuild and serve the dashboard directly:
 
 ```cmd
 npm --prefix web run build
@@ -28,28 +258,66 @@ npm --prefix web run build
 .\.venv\Scripts\python.exe -m nse_forecast.web --port 8000 --reports reports-price-comparison
 ```
 
-Open http://127.0.0.1:8000 locally. Use a new output directory if one already contains results. No model fitting or network data download occurs during rendering. Original predictions and the training manifest are copied unchanged; presentation metadata goes into `render.json`.
+### Export dashboard data as JSON
 
-## Data and new evaluations
+```cmd
+.\.venv\Scripts\python.exe -m nse_forecast.cli export-site --reports reports --output web/public
+```
 
-Use yfinance CSV caches for available histories and genuine Nifty Energy/Metal price-index CSVs for the two unavailable Yahoo histories. Follow [the import guide](docs/IMPORT_SECTOR_CSVS.md). No broker account, paid API or runtime Ponytail/Graphify installation is needed.
+---
 
-Run `python -m nse_forecast.cli audit-data --output audit` before evaluation, using the project Python interpreter. Known cross-source calendar discrepancies need verification. Default evaluation stops on unresolved audit findings. An explicit `--allow-unverified-calendar` enables only a clearly labeled exploratory run into a new output directory. Do not invent missing prices or automatically delete suspicious candles. The already inspected test period remains exploratory; revised reports do not make it an untouched final test.
+## Dashboard
 
-## Dashboard and outputs
+The React/TypeScript frontend (built with Vite) provides a BullBench homepage with search limited to the six study assets. Each asset page contains:
 
-The React/TypeScript site opens on a BullBench homepage with working search limited to the six study assets. Each asset has Overview, Chart, Model comparison, Analysis, Forecast ledger and Methodology sections. Full cached historical charts include hover/touch values, available volume and moving averages; model charts retain price/error/return views and quarter/regime filters. The ledger exports every filtered row. Missing results use prominently labeled examples; invalid results display an error. Nifty levels use points.
+- **Overview** -- Summary metrics and model rankings
+- **Chart** -- Full cached historical chart with hover/touch values, volume, and moving averages
+- **Model comparison** -- Side-by-side accuracy metrics across all five models
+- **Analysis** -- Per-quarter and per-regime diagnostics
+- **Forecast ledger** -- Filterable and exportable table of all predictions
+- **Methodology** -- Description of the validation protocol and feature construction
 
-The standalone report includes accuracy rankings, equal-weight comparisons, per-stock/quarter/regime diagnostics and uncertainty intervals. This is historical evaluation, not a live feed, recursive multi-day forecast, trading strategy or profitability claim.
+Model charts include price, error, and return views with quarter and regime filters. The ledger exports every filtered row as CSV. Missing results are prominently labeled as examples; invalid results display an error message. Nifty 50 levels are shown in index points.
+
+---
 
 ## Development
 
-Python 3.12 and Node.js 22 LTS are recommended. Use `python -m pip install -e ".[dev]"` in the project virtual environment; the supplied requirements lock is the earlier Linux snapshot, not a portable Windows lock.
+### Run Python tests
 
 ```cmd
 .\.venv\Scripts\python.exe -m pytest -q
-npm --prefix web ci
-npm --prefix web run build
 ```
 
-Browser tests use the built server and Playwright Chromium; see START_HERE.md. [Ponytail and Graphify](docs/DEVELOPMENT_TOOLS.md) are optional development tools. Do not commit machine environments, market caches, cookies, or generated reports. No automatic push or deployment is part of this update.
+### Run frontend browser tests
+
+```cmd
+npm --prefix web ci
+npm --prefix web run build
+npm --prefix web test
+```
+
+Browser tests use the built frontend and Playwright with Chromium. See [docs/DEVELOPMENT_TOOLS.md](docs/DEVELOPMENT_TOOLS.md) for optional development tooling.
+
+### Contribution guidelines
+
+- Do not commit virtual environments, market data caches, browser cookies, or generated reports.
+- Do not trigger automatic push or deployment from local builds.
+- All preprocessing (scalers, regime thresholds) must be computed on training data only.
+- Do not alter the already-inspected exploratory test period; revised reports do not convert it to an untouched final test set.
+
+---
+
+## Limitations
+
+- This is a historical evaluation, not a live data feed, recursive multi-day forecast, trading strategy, or profitability claim.
+- Availability assumptions for context features are conservative daily-bar approximations, not provider-level publication timestamps. Special trading sessions require individual calendar review.
+- Historical adjusted values may differ from original exchange quotes due to corporate actions.
+- The already-inspected test period is labeled exploratory and cannot be treated as a held-out final test.
+- Cross-asset skill comparisons use equal-weight averaging of baseline-relative improvements. Raw price errors across equities and the Nifty index are never aggregated directly.
+
+---
+
+## License
+
+Refer to the repository for licensing details.
