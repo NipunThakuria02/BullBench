@@ -1,0 +1,10 @@
+{
+  "ticker": "^NSEI",
+  "source": "yfinance",
+  "auto_adjust": true,
+  "start": "2021-10-01",
+  "end_inclusive": "2026-10-16",
+  "downloaded_utc": "2026-10-22T17:58:22.778779+00:00",
+  "rows": 1246,
+  "sha256": "dfddf6458de3df955117dde0dbd0937f65faa2ca741e413219a73b39522da1ee"
+}

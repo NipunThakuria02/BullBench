@@ -1,0 +1,10 @@
+{
+  "ticker": "^CNXIT",
+  "source": "yfinance",
+  "auto_adjust": true,
+  "start": "2021-10-01",
+  "end_inclusive": "2026-10-16",
+  "downloaded_utc": "2026-10-22T17:58:24.111931+00:00",
+  "rows": 1245,
+  "sha256": "a5ea8bb3f047d48c1095ef57f6596b50b5bc954e14d1e616577ea864190a6af6"
+}

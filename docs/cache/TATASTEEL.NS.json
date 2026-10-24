@@ -1,0 +1,10 @@
+{
+  "ticker": "TATASTEEL.NS",
+  "source": "yfinance",
+  "auto_adjust": true,
+  "start": "2021-10-01",
+  "end_inclusive": "2026-10-16",
+  "downloaded_utc": "2026-10-22T17:58:22.128726+00:00",
+  "rows": 1247,
+  "sha256": "13ba0edb291cfbc3e068c2f90c7d750787039fe3af43d31074439ee46f8958ea"
+}

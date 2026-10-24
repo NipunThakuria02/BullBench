@@ -1,0 +1,10 @@
+{
+  "ticker": "TCS.NS",
+  "source": "yfinance",
+  "auto_adjust": true,
+  "start": "2021-10-01",
+  "end_inclusive": "2026-10-16",
+  "downloaded_utc": "2026-10-22T17:58:20.576899+00:00",
+  "rows": 1247,
+  "sha256": "6eea8e55972e4a6764e601b427135af171e6f7e2ae7155cb398f3b3118911e8b"
+}

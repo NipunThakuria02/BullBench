@@ -1,0 +1,10 @@
+{
+  "ticker": "RELIANCE.NS",
+  "source": "yfinance",
+  "auto_adjust": true,
+  "start": "2021-10-01",
+  "end_inclusive": "2026-10-16",
+  "downloaded_utc": "2026-10-22T17:58:21.377684+00:00",
+  "rows": 1247,
+  "sha256": "d68a948d4756f2e492c0956d9e09f144ea52e61f23b25f7584fb045c2f4f1351"
+}

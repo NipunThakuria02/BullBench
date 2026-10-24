@@ -1,0 +1,61 @@
+# .vercelignore — files excluded from Vercel's uploaded deployment bundle.
+# The deployed site is the Vite-built frontend only (web/dist/).
+# Everything below is research pipeline, local data, or development tooling.
+
+# Python research pipeline and environments
+src/
+tests/
+pyproject.toml
+requirements.lock
+.venv/
+__pycache__/
+*.egg-info/
+*.py
+
+# Local market data caches (CSV + JSON provenance)
+data/
+
+# Research outputs and reports (not part of the public site)
+reports/
+reports-v2-exploratory/
+reports-price-comparison/
+
+# Raw sector CSV imports (private research inputs)
+imports/
+
+# Audit outputs
+audit/
+
+# Backup directories created by updater scripts
+backup-stock-v2-*/
+backup-stock-price-*/
+backup-bullbench-*/
+backup-bullbench-equations-*/
+backup-bullbench-logos-*/
+
+# Documentation and review archives
+docs/
+STOCK-review.zip
+
+# Update/installer scripts (already gitignored; belt-and-suspenders)
+apply_stock_update.py
+apply_price_update.py
+apply_bullbench_update.py
+apply_bullbench_equations_update.py
+apply_bullbench_logos_update.py
+
+# Markdown documentation (not needed at runtime)
+BULLBENCH_UPDATE.md
+PRICE_UPDATE.md
+UPDATE_INSTRUCTIONS.md
+START_HERE.md
+AGENTS.md
+
+# Playwright output and build caches
+web/playwright-report/
+web/test-results/
+web/.pytest_cache/
+web/tsconfig.tsbuildinfo
+
+# Node modules (Vercel installs its own)
+web/node_modules/

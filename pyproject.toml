@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nse-forecast-comparison"
+version = "0.1.0"
+description = "Walk-forward comparison of five next-day NSE return models"
+requires-python = ">=3.11"
+dependencies = ["numpy>=1.26,<3", "pandas>=2.2,<3", "scikit-learn>=1.5,<2", "statsmodels>=0.14,<0.15", "xgboost>=2.1,<4", "yfinance>=0.2.54,<1"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<10"]
+
+[project.scripts]
+nse-forecast = "nse_forecast.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
